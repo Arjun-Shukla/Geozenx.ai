@@ -19,7 +19,7 @@ export default function Header() {
                 GeoZenX<span className="text-cyan-400 font-mono">.ai</span>
               </span>
               <span className="px-2 py-0.5 text-[10px] font-mono font-medium uppercase tracking-wider bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 rounded">
-                v2.4 PROTOTYPE
+                v1.0
               </span>
             </div>
             <p className="text-[10px] font-mono font-semibold tracking-widest text-slate-400 uppercase">
