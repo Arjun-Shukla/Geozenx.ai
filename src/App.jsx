@@ -53,7 +53,7 @@ export default function App() {
           <div className="flex items-center space-x-4">
             <span className="flex items-center space-x-1">
               <Shield className="w-3.5 h-3.5 text-slate-400" />
-              <span>MOCK PLATFORM PROTOTYPE</span>
+              <span>TEST PLATFORM</span>
             </span>
             <span>COORDS: 24.7136° N, 46.6753° E</span>
           </div>
