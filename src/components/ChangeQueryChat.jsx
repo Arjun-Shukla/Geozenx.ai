@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, Send, Bot, User, Sparkles, CornerDownLeft } from 'lucide-react';
-import { getMockChatResponse } from '../data/mockData';
+import { askChangeQuestion } from '../api';
 
 const SUGGESTIONS = [
   "What changed the most?",
@@ -9,7 +9,7 @@ const SUGGESTIONS = [
   "Summarize the detected changes"
 ];
 
-export default function ChangeQueryChat() {
+export default function ChangeQueryChat({ analysisData }) {
   const [messages, setMessages] = useState([
     {
       id: 'init-1',
@@ -46,11 +46,20 @@ export default function ChangeQueryChat() {
     if (!textToSend) setInputQuery('');
     setIsTyping(true);
 
-    setTimeout(() => {
-      const response = getMockChatResponse(text);
-      setMessages((prev) => [...prev, { ...response, id: (Date.now() + 1).toString() }]);
-      setIsTyping(false);
-    }, 600);
+    askChangeQuestion({ query: text, analysis: analysisData })
+      .then((response) => {
+        setMessages((prev) => [...prev, { ...response, id: (Date.now() + 1).toString() }]);
+      })
+      .catch((error) => {
+        setMessages((prev) => [...prev, {
+          text: `Backend chat request failed: ${error.message}`,
+          badge: 'API ERROR',
+          sender: 'assistant',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          id: (Date.now() + 1).toString()
+        }]);
+      })
+      .finally(() => setIsTyping(false));
   };
 
   return (

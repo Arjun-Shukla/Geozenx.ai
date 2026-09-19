@@ -9,8 +9,10 @@ import { Globe, Shield, Terminal } from 'lucide-react';
 export default function App() {
   const [isAnalyzed, setIsAnalyzed] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisData, setAnalysisData] = useState(null);
 
-  const handleAnalysisComplete = () => {
+  const handleAnalysisComplete = (result) => {
+    setAnalysisData(result);
     setIsAnalyzed(true);
   };
 
@@ -36,10 +38,11 @@ export default function App() {
           {/* Section 2: Transition Matrix & Pseudo-Change Filter */}
           <TransitionMatrix 
             isAnalyzed={isAnalyzed}
+            analysisData={analysisData}
           />
 
           {/* Section 3: Change Intelligence Natural Language Chat */}
-          <ChangeQueryChat />
+          <ChangeQueryChat analysisData={analysisData} />
         </main>
       </div>
 

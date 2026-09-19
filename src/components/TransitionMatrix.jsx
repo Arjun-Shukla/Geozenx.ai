@@ -2,12 +2,18 @@ import React, { useState } from 'react';
 import { Table, TrendingUp, TrendingDown, ShieldAlert, CheckCircle2, Sliders, Info, Eye, Layers } from 'lucide-react';
 import { MOCK_TRANSITION_MATRIX, MOCK_CHANGE_SUMMARY, FILTER_STEPS, SAMPLE_PRESETS } from '../data/mockData';
 
-export default function TransitionMatrix({ isAnalyzed }) {
+export default function TransitionMatrix({ isAnalyzed, analysisData }) {
   const [isFiltering, setIsFiltering] = useState(false);
   const [filterComplete, setFilterComplete] = useState(false);
   const [filterProgress, setFilterProgress] = useState(0);
   const [filterStepIndex, setFilterStepIndex] = useState(0);
   const [showMaskPreview, setShowMaskPreview] = useState(false);
+  const transitionMatrix = analysisData?.transitionMatrix?.length
+    ? analysisData.transitionMatrix
+    : MOCK_TRANSITION_MATRIX;
+  const changeSummary = analysisData?.summary
+    ? { ...MOCK_CHANGE_SUMMARY, ...analysisData.summary }
+    : MOCK_CHANGE_SUMMARY;
 
   if (!isAnalyzed) {
     return (
@@ -97,7 +103,7 @@ export default function TransitionMatrix({ isAnalyzed }) {
               <span className="text-[11px] font-mono text-slate-400">CYAN = URBAN BUILDINGS (+65%) | RED = VEGETATION (-12%)</span>
             </div>
             <img 
-              src={SAMPLE_PRESETS[0].maskSrc} 
+              src={analysisData?.maskSrc || SAMPLE_PRESETS[0].maskSrc} 
               alt="Spectral Change Difference Mask" 
               className="w-full h-64 object-cover rounded border border-space-700"
             />
@@ -106,7 +112,7 @@ export default function TransitionMatrix({ isAnalyzed }) {
 
         {/* Transition Grid Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {MOCK_TRANSITION_MATRIX.map((item) => {
+          {transitionMatrix.map((item) => {
             const isPositive = item.changePercent > 0;
             return (
               <div 
@@ -166,7 +172,7 @@ export default function TransitionMatrix({ isAnalyzed }) {
             <div>
               <div className="text-white font-semibold uppercase tracking-wider">CHANGE SUMMARY</div>
               <div className="text-slate-400 text-[11px] mt-0.5">
-                PRIMARY VECTOR: <span className="text-cyan-300 font-mono font-medium">{MOCK_CHANGE_SUMMARY.primaryVector}</span>
+                PRIMARY VECTOR: <span className="text-cyan-300 font-mono font-medium">{changeSummary.primaryVector}</span>
               </div>
             </div>
           </div>
@@ -174,16 +180,16 @@ export default function TransitionMatrix({ isAnalyzed }) {
           <div className="flex items-center space-x-6 text-right font-mono">
             <div>
               <div className="text-slate-400 text-[10px]">ANALYZED AREA</div>
-              <div className="text-white font-bold">{MOCK_CHANGE_SUMMARY.totalAnalyzedAreaKm2} km²</div>
+              <div className="text-white font-bold">{changeSummary.totalAnalyzedAreaKm2} km²</div>
             </div>
             <div>
               <div className="text-slate-400 text-[10px]">NET CLASS SHIFT</div>
-              <div className="text-cyan-400 font-bold">+{MOCK_CHANGE_SUMMARY.netClassShiftPercent}%</div>
+              <div className="text-cyan-400 font-bold">+{changeSummary.netClassShiftPercent}%</div>
             </div>
             <div>
               <div className="text-slate-400 text-[10px]">CONFIDENCE SCORE</div>
               <div className="text-emerald-400 font-bold">
-                {filterComplete ? `${MOCK_CHANGE_SUMMARY.filteredConfidenceScore}%` : `${MOCK_CHANGE_SUMMARY.confidenceScore}%`}
+                {filterComplete ? `${changeSummary.filteredConfidenceScore}%` : `${changeSummary.confidenceScore}%`}
               </div>
             </div>
           </div>

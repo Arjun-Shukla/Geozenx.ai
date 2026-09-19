@@ -1,12 +1,15 @@
 import React, { useState, useRef } from 'react';
 import { Upload, Image as ImageIcon, CheckCircle, RefreshCw, Layers, Crosshair, ArrowRight, Play, FileCheck } from 'lucide-react';
 import { SAMPLE_PRESETS, ANALYSIS_STEPS } from '../data/mockData';
+import { analyzeImages } from '../api';
 
 export default function ImageAnalysis({ onAnalysisComplete, isAnalyzing, setIsAnalyzing }) {
   const [t1Image, setT1Image] = useState(SAMPLE_PRESETS[0].t1Src);
   const [t2Image, setT2Image] = useState(SAMPLE_PRESETS[0].t2Src);
   const [t1FileName, setT1FileName] = useState('Sentinel2_Sector07A_T1.tif');
   const [t2FileName, setT2FileName] = useState('Sentinel2_Sector07A_T2.tif');
+  const [t1File, setT1File] = useState(null);
+  const [t2File, setT2File] = useState(null);
   
   const [progress, setProgress] = useState(0);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -14,9 +17,10 @@ export default function ImageAnalysis({ onAnalysisComplete, isAnalyzing, setIsAn
   const t1InputRef = useRef(null);
   const t2InputRef = useRef(null);
 
-  const handleFileUpload = (event, setImage, setFileName) => {
+  const handleFileUpload = (event, setImage, setFileName, setFile) => {
     const file = event.target.files?.[0];
     if (file) {
+      setFile(file);
       setFileName(file.name);
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -26,7 +30,7 @@ export default function ImageAnalysis({ onAnalysisComplete, isAnalyzing, setIsAn
     }
   };
 
-  const handleRunAnalysis = () => {
+  const handleRunAnalysis = async () => {
     if (isAnalyzing) return;
     setIsAnalyzing(true);
     setProgress(0);
@@ -38,17 +42,21 @@ export default function ImageAnalysis({ onAnalysisComplete, isAnalyzing, setIsAn
     const increment = 100 / (duration / intervalTime);
 
     let currentProgress = 0;
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       currentProgress += increment;
       if (currentProgress >= 100) {
         currentProgress = 100;
         setProgress(100);
         setCurrentStepIndex(totalSteps - 1);
         clearInterval(interval);
-        setTimeout(() => {
+        try {
+          const result = await analyzeImages({ t1File, t2File, t1Image, t2Image });
           setIsAnalyzing(false);
-          onAnalysisComplete();
-        }, 500);
+          onAnalysisComplete(result);
+        } catch (error) {
+          setIsAnalyzing(false);
+          window.alert(`Image analysis failed: ${error.message}`);
+        }
       } else {
         setProgress(Math.round(currentProgress));
         const stepIdx = Math.min(
@@ -61,6 +69,8 @@ export default function ImageAnalysis({ onAnalysisComplete, isAnalyzing, setIsAn
   };
 
   const handlePresetSelect = (preset) => {
+    setT1File(null);
+    setT2File(null);
     setT1Image(preset.t1Src);
     setT2Image(preset.t2Src);
     setT1FileName(`${preset.id}_T1.tif`);
@@ -123,7 +133,7 @@ export default function ImageAnalysis({ onAnalysisComplete, isAnalyzing, setIsAn
                 ref={t1InputRef} 
                 className="hidden" 
                 accept="image/*"
-                onChange={(e) => handleFileUpload(e, setT1Image, setT1FileName)}
+                onChange={(e) => handleFileUpload(e, setT1Image, setT1FileName, setT1File)}
               />
 
               {t1Image ? (
@@ -187,7 +197,7 @@ export default function ImageAnalysis({ onAnalysisComplete, isAnalyzing, setIsAn
                 ref={t2InputRef} 
                 className="hidden" 
                 accept="image/*"
-                onChange={(e) => handleFileUpload(e, setT2Image, setT2FileName)}
+                onChange={(e) => handleFileUpload(e, setT2Image, setT2FileName, setT2File)}
               />
 
               {t2Image ? (
