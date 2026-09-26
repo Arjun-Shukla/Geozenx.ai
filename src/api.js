@@ -1,3 +1,5 @@
+import { MOCK_CHANGE_SUMMARY, MOCK_TRANSITION_MATRIX, SAMPLE_PRESETS } from './data/mockData';
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const ANALYZE_ENDPOINT = import.meta.env.VITE_ANALYZE_ENDPOINT || '/api/analyze';
 const CHAT_ENDPOINT = import.meta.env.VITE_CHAT_ENDPOINT || '/api/chat';
@@ -10,7 +12,7 @@ const apiUrl = (endpoint) => {
 const readResponse = async (response) => {
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    const message = body?.message || body?.error || `Request failed with status ${response.status}`;
+    const message = body?.error || body?.message || `Request failed with status ${response.status}`;
     throw new Error(message);
   }
   return body;
@@ -79,16 +81,29 @@ export const normalizeAnalysisResponse = (body) => {
 };
 
 export const analyzeImages = async ({ t1File, t2File, t1Image, t2Image }) => {
+  if (!t1File && !t2File) {
+    return normalizeAnalysisResponse({
+      transitionMatrix: MOCK_TRANSITION_MATRIX,
+      summary: MOCK_CHANGE_SUMMARY,
+      maskSrc: SAMPLE_PRESETS[0].maskSrc
+    });
+  }
+
   const formData = new FormData();
   const beforeImage = t1File || await dataUrlToFile(t1Image, 'before-image');
   const afterImage = t2File || await dataUrlToFile(t2Image, 'after-image');
   formData.append('beforeImage', beforeImage, beforeImage.name);
   formData.append('afterImage', afterImage, afterImage.name);
 
-  const response = await fetch(apiUrl(ANALYZE_ENDPOINT), {
-    method: 'POST',
-    body: formData
-  });
+  let response;
+  try {
+    response = await fetch(apiUrl(ANALYZE_ENDPOINT), {
+      method: 'POST',
+      body: formData
+    });
+  } catch {
+    throw new Error('The image analysis service is unreachable. Start the backend or configure VITE_API_BASE_URL to analyze uploaded images.');
+  }
 
   return normalizeAnalysisResponse(await readResponse(response));
 };
