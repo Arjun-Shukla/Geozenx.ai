@@ -1,3 +1,466 @@
+// import express from "express";
+// import cors from "cors";
+// import multer from "multer";
+// import dotenv from "dotenv";
+// import { GoogleGenAI } from "@google/genai";
+// import { fileURLToPath } from "node:url";
+
+// dotenv.config({ path: fileURLToPath(new URL(".env", import.meta.url)) });
+
+// const app = express();
+
+// app.use(cors());
+// app.use(express.json());
+
+// const upload = multer({
+//   storage: multer.memoryStorage(),
+//   limits: {
+//     fileSize: 10 * 1024 * 1024
+//   }
+// });
+
+// const ai = new GoogleGenAI({
+//   apiKey: process.env.GEMINI_API_KEY
+// });
+
+
+// // ==========================================
+// // GEMINI RESPONSE SCHEMA
+// // ==========================================
+
+// const responseSchema = {
+//   type: "object",
+
+//   properties: {
+
+//     transitionMatrix: {
+//       type: "array",
+
+//       items: {
+//         type: "object",
+
+//         properties: {
+
+//           category: {
+//             type: "string"
+//           },
+
+//           t1Percent: {
+//             type: "number"
+//           },
+
+//           t2Percent: {
+//             type: "number"
+//           },
+
+//           changePercent: {
+//             type: "number"
+//           },
+
+//           changeType: {
+//             type: "string",
+//             enum: [
+//               "increase",
+//               "decrease",
+//               "unchanged"
+//             ]
+//           },
+
+//           description: {
+//             type: "string"
+//           },
+
+//           filteredNoiseDelta: {
+//             type: "number"
+//           }
+
+//         },
+
+//         required: [
+//           "category",
+//           "t1Percent",
+//           "t2Percent",
+//           "changePercent",
+//           "changeType",
+//           "description",
+//           "filteredNoiseDelta"
+//         ]
+//       }
+//     },
+
+
+//     changeSummary: {
+
+//       type: "object",
+
+//       properties: {
+
+//         primaryVector: {
+//           type: "string"
+//         },
+
+//         totalAnalyzedAreaKm2: {
+//           type: ["number", "null"]
+//         },
+
+//         netClassShiftPercent: {
+//           type: "number"
+//         },
+
+//         confidenceScore: {
+//           type: "number"
+//         },
+
+//         filteredConfidenceScore: {
+//           type: "number"
+//         },
+
+//         spatialResolution: {
+//           type: "string"
+//         },
+
+//         timestamp: {
+//           type: "string"
+//         }
+
+//       },
+
+//       required: [
+//         "primaryVector",
+//         "totalAnalyzedAreaKm2",
+//         "netClassShiftPercent",
+//         "confidenceScore",
+//         "filteredConfidenceScore",
+//         "spatialResolution",
+//         "timestamp"
+//       ]
+//     }
+
+//   },
+
+//   required: [
+//     "transitionMatrix",
+//     "changeSummary"
+//   ]
+// };
+
+
+// // ==========================================
+// // ANALYZE TWO IMAGES
+// // ==========================================
+
+// app.post(
+//   "/api/analyze",
+//   upload.fields([
+//     {
+//       name: "beforeImage",
+//       maxCount: 1
+//     },
+//     {
+//       name: "afterImage",
+//       maxCount: 1
+//     }
+//   ]),
+
+//   async (req, res) => {
+
+//     try {
+
+//       const beforeImage =
+//         req.files?.beforeImage?.[0];
+
+//       const afterImage =
+//         req.files?.afterImage?.[0];
+
+
+//       // Check images
+
+//       if (!beforeImage || !afterImage) {
+
+//         return res.status(400).json({
+//           success: false,
+//           message: "Both BEFORE and AFTER images are required."
+//         });
+
+//       }
+
+
+//       // Convert images to Base64
+
+//       const beforeBase64 =
+//         beforeImage.buffer.toString("base64");
+
+//       const afterBase64 =
+//         afterImage.buffer.toString("base64");
+
+
+//       // Optional area supplied by frontend
+
+//       const areaKm2 =
+//         req.body.areaKm2
+//           ? Number(req.body.areaKm2)
+//           : null;
+
+
+//       // ==========================================
+//       // GEMINI PROMPT
+//       // ==========================================
+
+//       const prompt = `
+
+// You are an expert visual change detection AI.
+
+// You will receive TWO images.
+
+// IMAGE 1 = BEFORE
+// IMAGE 2 = AFTER
+
+// Compare them carefully.
+
+// This is a land-cover / remote-sensing style change detection application.
+
+// Analyze these categories when visible:
+
+// 1. VEGETATION
+// 2. BUILDINGS
+// 3. WATER
+// 4. BARE LAND
+// 5. ROADS
+// 6. OTHER IMPORTANT LAND-COVER TYPES
+
+// For each category estimate its visible percentage in:
+
+// t1Percent = BEFORE image
+// t2Percent = AFTER image
+
+// Calculate:
+
+// changePercent = t2Percent - t1Percent
+
+// Classify change as:
+
+// increase
+// decrease
+// unchanged
+
+// Write a short factual description of what changed.
+
+// IMPORTANT:
+
+// - Do NOT invent exact geographic measurements.
+// - Percentages are visual estimates of the visible image.
+// - If something cannot be reliably identified, use a reasonable estimate and lower confidence.
+// - Do not claim an exact km² area unless the user supplied one.
+// - Do not invent satellite sensor information.
+// - Confidence must represent confidence in the visual comparison.
+// - Focus on actual visible differences between the two images.
+
+// For filteredNoiseDelta:
+
+// Give a small estimated value representing possible noise/artifact difference.
+// Do NOT exaggerate it.
+
+// For primaryVector:
+
+// Describe the most significant transition.
+
+// Example:
+
+// "Vegetation → High-Density Buildings"
+
+// If the images do not show land-cover changes, clearly say so.
+
+// Return ONLY the requested JSON structure.
+// `;
+
+
+//       // ==========================================
+//       // GEMINI API
+//       // ==========================================
+
+//       const response =
+//         await ai.interactions.create({
+
+//           model: "gemini-3.8-flash",
+
+//           input: [
+
+//             {
+//               type: "image",
+
+//               data: beforeBase64,
+
+//               mime_type: beforeImage.mimetype
+//             },
+
+//             {
+//               type: "image",
+
+//               data: afterBase64,
+
+//               mime_type: afterImage.mimetype
+//             },
+
+//             {
+//               type: "text",
+
+//               text: prompt
+//             }
+
+//           ],
+
+
+//           // Structured JSON output
+
+//           response_format: {
+
+//             type: "text",
+
+//             mime_type: "application/json",
+
+//             schema: responseSchema
+
+//           }
+
+//         });
+
+
+//       // Parse Gemini JSON
+
+//       const result =
+//         JSON.parse(response.output_text);
+
+
+//       // If user supplied actual area,
+//       // attach it instead of inventing one.
+
+//       result.changeSummary.totalAnalyzedAreaKm2 =
+//         areaKm2;
+
+
+//       // Send to React
+
+//       res.json({
+
+//         success: true,
+
+//         data: result
+
+//       });
+
+
+//     } catch (error) {
+
+//       console.error(
+//         "Gemini Analysis Error:",
+//         error
+//       );
+
+//       res.status(500).json({
+
+//         success: false,
+
+//         message: "Image analysis failed.",
+
+//         error: error.message
+
+//       });
+
+//     }
+
+//   }
+// );
+// // ===============================
+// // AI CHATBOT
+// // ===============================
+
+// app.post("/api/chat", async (req, res) => {
+//   try {
+//     const { message, analysisContext, previousInteractionId } = req.body;
+
+//     if (!message) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Message is required."
+//       });
+//     }
+
+//     const context = analysisContext
+//       ? `
+// You are Geozenx AI, an AI assistant for satellite and land-cover
+// change analysis.
+
+// Here is the latest image analysis result:
+
+// ${JSON.stringify(analysisContext, null, 2)}
+
+// Use this analysis when answering the user's question.
+// Do not invent exact geographic measurements that are not present
+// in the provided analysis.
+// `
+//       : `
+// You are Geozenx AI, an AI assistant for satellite imagery,
+// land-cover classification, remote sensing and geographical
+// change analysis.
+
+// Answer clearly and helpfully.
+// `;
+
+//     const interactionInput = `${context}
+
+// USER QUESTION:
+// ${message}
+// `;
+
+//     const interactionOptions = {
+//       model: "gemini-3.8-flash",
+//       input: interactionInput
+//     };
+
+//     // Continue previous conversation if available
+//     if (previousInteractionId) {
+//       interactionOptions.previous_interaction_id =
+//         previousInteractionId;
+//     }
+
+//     const response = await ai.interactions.create(interactionOptions);
+
+//     res.json({
+//       success: true,
+//       reply: response.output_text,
+//       interactionId: response.id
+//     });
+
+//   } catch (error) {
+//     console.error("CHATBOT ERROR:", error);
+
+//     res.status(500).json({
+//       success: false,
+//       message: "Chatbot failed.",
+//       error: error.message
+//     });
+//   }
+// });
+
+
+// // ==========================================
+// // SERVER
+// // ==========================================
+
+// const PORT =
+//   process.env.PORT || 5000;
+
+// app.listen(PORT, () => {
+
+//   console.log(`
+//     Geozenx AI backend running on port ${PORT}
+//   `);
+
+// });
+
+
+// New Code --
+
 import express from "express";
 import cors from "cors";
 import multer from "multer";
@@ -5,38 +468,165 @@ import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 import { fileURLToPath } from "node:url";
 
-dotenv.config({ path: fileURLToPath(new URL(".env", import.meta.url)) });
+dotenv.config({
+  path: fileURLToPath(new URL(".env", import.meta.url))
+});
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
+
+// ==========================================
+// MULTER
+// ==========================================
+
 const upload = multer({
   storage: multer.memoryStorage(),
+
   limits: {
     fileSize: 10 * 1024 * 1024
   }
 });
+
+
+// ==========================================
+// GEMINI
+// ==========================================
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY
 });
 
 
-// ==========================================
-// GEMINI RESPONSE SCHEMA
-// ==========================================
+// ============================================================
+// FALSE DETECTION / IMAGE QUALITY RESPONSE SCHEMA
+// ============================================================
+
+const falseDetectionSchema = {
+
+  type: "object",
+
+  properties: {
+
+    validForChangeDetection: {
+      type: "boolean"
+    },
+
+    falseDetectionRisk: {
+      type: "string",
+      enum: [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+
+    confidence: {
+      type: "number"
+    },
+
+    issues: {
+
+      type: "array",
+
+      items: {
+
+        type: "object",
+
+        properties: {
+
+          type: {
+            type: "string",
+            enum: [
+              "blur",
+              "cloud",
+              "fog",
+              "haze",
+              "brightness_difference",
+              "lighting_difference",
+              "seasonal_difference",
+              "image_mismatch",
+              "low_quality",
+              "occlusion",
+              "other"
+            ]
+          },
+
+          detected: {
+            type: "boolean"
+          },
+
+          severity: {
+            type: "string",
+            enum: [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+
+          explanation: {
+            type: "string"
+          }
+
+        },
+
+        required: [
+          "type",
+          "detected",
+          "severity",
+          "explanation"
+        ]
+
+      }
+
+    },
+
+    primaryReason: {
+      type: "string"
+    },
+
+    recommendation: {
+      type: "string"
+    },
+
+    message: {
+      type: "string"
+    }
+
+  },
+
+  required: [
+    "validForChangeDetection",
+    "falseDetectionRisk",
+    "confidence",
+    "issues",
+    "primaryReason",
+    "recommendation",
+    "message"
+  ]
+
+};
+
+
+// ============================================================
+// LAND-COVER ANALYSIS RESPONSE SCHEMA
+// ============================================================
 
 const responseSchema = {
+
   type: "object",
 
   properties: {
 
     transitionMatrix: {
+
       type: "array",
 
       items: {
+
         type: "object",
 
         properties: {
@@ -58,12 +648,15 @@ const responseSchema = {
           },
 
           changeType: {
+
             type: "string",
+
             enum: [
               "increase",
               "decrease",
               "unchanged"
             ]
+
           },
 
           description: {
@@ -85,7 +678,9 @@ const responseSchema = {
           "description",
           "filteredNoiseDelta"
         ]
+
       }
+
     },
 
 
@@ -134,6 +729,7 @@ const responseSchema = {
         "spatialResolution",
         "timestamp"
       ]
+
     }
 
   },
@@ -142,24 +738,288 @@ const responseSchema = {
     "transitionMatrix",
     "changeSummary"
   ]
+
 };
 
 
-// ==========================================
-// ANALYZE TWO IMAGES
-// ==========================================
+// ============================================================
+// FALSE DETECTION CHECK FUNCTION
+// ============================================================
+//
+// This function is used internally by /api/analyze.
+// It can also be exposed through /api/check-image-quality.
+//
+// ============================================================
+
+async function checkFalseDetection(
+  beforeImage,
+  afterImage
+) {
+
+  const beforeBase64 =
+    beforeImage.buffer.toString("base64");
+
+  const afterBase64 =
+    afterImage.buffer.toString("base64");
+
+
+  const prompt = `
+
+You are an expert remote-sensing image quality and
+false-change detection AI.
+
+You will receive TWO images.
+
+IMAGE 1 = BEFORE
+IMAGE 2 = AFTER
+
+Your job is NOT to perform the final land-cover analysis.
+
+Your ONLY job is to determine whether these images are
+reliable enough for temporal land-cover change detection.
+
+Carefully inspect BOTH images.
+
+Check for conditions that can create FALSE CHANGE DETECTION.
+
+--------------------------------------------------
+1. BLUR
+--------------------------------------------------
+
+Check for:
+
+- Motion blur
+- Focus blur
+- Very low sharpness
+- Loss of spatial details
+
+--------------------------------------------------
+2. CLOUDS
+--------------------------------------------------
+
+Check for:
+
+- Heavy cloud coverage
+- Cloud shadows
+- Different cloud positions
+- Large areas hidden by clouds
+
+--------------------------------------------------
+3. FOG / HAZE
+--------------------------------------------------
+
+Check for:
+
+- Atmospheric haze
+- Fog
+- Smoke
+- Reduced visibility
+
+--------------------------------------------------
+4. BRIGHTNESS / LIGHTING DIFFERENCE
+--------------------------------------------------
+
+Check for:
+
+- Major brightness difference
+- Different illumination
+- Strong shadows
+- Different sun angle
+- Day/night mismatch
+
+These can make the same land cover appear different.
+
+--------------------------------------------------
+5. SEASONAL DIFFERENCE
+--------------------------------------------------
+
+Check for:
+
+- Green vs dry vegetation
+- Seasonal vegetation changes
+- Seasonal water changes
+- Snow/weather effects
+
+Do NOT automatically classify these as real land-cover
+changes.
+
+--------------------------------------------------
+6. IMAGE MISMATCH
+--------------------------------------------------
+
+Check whether:
+
+- Images represent different geographical areas
+- Camera/satellite perspective is significantly different
+- Major crop/resize mismatch exists
+- Images clearly do not represent the same location
+
+--------------------------------------------------
+7. LOW IMAGE QUALITY
+--------------------------------------------------
+
+Check for:
+
+- Very low resolution
+- Pixelation
+- Compression artifacts
+- Insufficient visual information
+
+--------------------------------------------------
+8. OCCLUSION
+--------------------------------------------------
+
+Check for:
+
+- Large objects blocking the land surface
+- Clouds
+- Buildings
+- Shadows
+- Other visual obstruction
+
+--------------------------------------------------
+IMPORTANT RULES
+--------------------------------------------------
+
+- Do NOT invent satellite sensor information.
+- Do NOT invent geographic coordinates.
+- Do NOT invent exact geographic measurements.
+- Do NOT claim a real land-cover change if it could
+  be caused by image quality or environmental conditions.
+- Small amounts of blur/cloud/haze should NOT automatically
+  make an image invalid.
+- Only mark HIGH risk when the detected problem could
+  significantly affect temporal change detection.
+- Compare BOTH images.
+- Explain WHY each detected issue can cause false changes.
+
+--------------------------------------------------
+DECISION
+--------------------------------------------------
+
+validForChangeDetection = true
+
+when the images are reasonably usable for change detection.
+
+validForChangeDetection = false
+
+when image quality or environmental differences are severe
+enough that the analysis could produce unreliable results.
+
+falseDetectionRisk:
+
+LOW:
+Images are generally reliable.
+
+MEDIUM:
+Some conditions may introduce false changes.
+
+HIGH:
+Analysis is likely to be unreliable.
+
+confidence:
+
+Give a value from 0 to 100 representing your confidence
+in this quality assessment.
+
+--------------------------------------------------
+MESSAGE
+--------------------------------------------------
+
+The message should be short and understandable to a normal
+user.
+
+Example:
+
+"False change detection risk is high because the AFTER
+image contains heavy cloud coverage."
+
+--------------------------------------------------
+RECOMMENDATION
+--------------------------------------------------
+
+Tell the user what should be done.
+
+Example:
+
+"Upload a clearer AFTER image with minimal cloud coverage."
+
+Return ONLY valid JSON matching the provided schema.
+
+`;
+
+
+  const response =
+    await ai.interactions.create({
+
+      model: "gemini-3.8-flash",
+
+      input: [
+
+        {
+          type: "image",
+          data: beforeBase64,
+          mime_type: beforeImage.mimetype
+        },
+
+        {
+          type: "image",
+          data: afterBase64,
+          mime_type: afterImage.mimetype
+        },
+
+        {
+          type: "text",
+          text: prompt
+        }
+
+      ],
+
+      response_format: {
+
+        type: "text",
+
+        mime_type: "application/json",
+
+        schema: falseDetectionSchema
+
+      }
+
+    });
+
+
+  return JSON.parse(
+    response.output_text
+  );
+
+}
+
+
+// ============================================================
+// STANDALONE FALSE DETECTION API
+// ============================================================
+//
+// POST /api/check-image-quality
+//
+// This allows the frontend to check image quality separately.
+//
+// ============================================================
 
 app.post(
-  "/api/analyze",
+  "/api/check-image-quality",
+
   upload.fields([
+
     {
       name: "beforeImage",
       maxCount: 1
     },
+
     {
       name: "afterImage",
       maxCount: 1
     }
+
   ]),
 
   async (req, res) => {
@@ -173,19 +1033,198 @@ app.post(
         req.files?.afterImage?.[0];
 
 
-      // Check images
-
       if (!beforeImage || !afterImage) {
 
         return res.status(400).json({
+
           success: false,
-          message: "Both BEFORE and AFTER images are required."
+
+          message:
+            "Both BEFORE and AFTER images are required."
+
         });
 
       }
 
 
-      // Convert images to Base64
+      const falseDetection =
+        await checkFalseDetection(
+          beforeImage,
+          afterImage
+        );
+
+
+      return res.json({
+
+        success: true,
+
+        data: falseDetection
+
+      });
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "FALSE DETECTION CHECK ERROR:",
+        error
+      );
+
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          "Image quality analysis failed.",
+
+        error:
+          error.message
+
+      });
+
+    }
+
+  }
+);
+
+
+// ============================================================
+// ANALYZE TWO IMAGES
+// ============================================================
+//
+// POST /api/analyze
+//
+// Flow:
+//
+// Upload images
+//      ↓
+// False Detection Check
+//      ↓
+// HIGH RISK?
+//      ↓
+// YES → Stop
+// NO  → Continue
+//      ↓
+// Land Cover Analysis
+//
+// ============================================================
+
+app.post(
+
+  "/api/analyze",
+
+  upload.fields([
+
+    {
+      name: "beforeImage",
+      maxCount: 1
+    },
+
+    {
+      name: "afterImage",
+      maxCount: 1
+    }
+
+  ]),
+
+  async (req, res) => {
+
+    try {
+
+      // ----------------------------------------------------
+      // GET IMAGES
+      // ----------------------------------------------------
+
+      const beforeImage =
+        req.files?.beforeImage?.[0];
+
+      const afterImage =
+        req.files?.afterImage?.[0];
+
+
+      // ----------------------------------------------------
+      // CHECK IMAGES EXIST
+      // ----------------------------------------------------
+
+      if (!beforeImage || !afterImage) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            "Both BEFORE and AFTER images are required."
+
+        });
+
+      }
+
+
+      // ----------------------------------------------------
+      // OPTIONAL AREA
+      // ----------------------------------------------------
+
+      const areaKm2 =
+        req.body.areaKm2
+          ? Number(req.body.areaKm2)
+          : null;
+
+
+      // ====================================================
+      // STEP 1
+      // FALSE DETECTION CHECK
+      // ====================================================
+
+      console.log(
+        "Running false detection check..."
+      );
+
+
+      const falseDetection =
+        await checkFalseDetection(
+          beforeImage,
+          afterImage
+        );
+
+
+      console.log(
+        "False detection risk:",
+        falseDetection.falseDetectionRisk
+      );
+
+
+      // ====================================================
+      // STEP 2
+      // STOP ANALYSIS IF HIGH RISK
+      // ====================================================
+
+      if (
+        falseDetection.validForChangeDetection === false ||
+        falseDetection.falseDetectionRisk === "high"
+      ) {
+
+        return res.status(422).json({
+
+          success: false,
+
+          analysisBlocked: true,
+
+          message:
+            "Change analysis was blocked because the uploaded images may produce false detection.",
+
+          falseDetection: falseDetection
+
+        });
+
+      }
+
+
+      // ====================================================
+      // STEP 3
+      // CONVERT IMAGES TO BASE64
+      // ====================================================
 
       const beforeBase64 =
         beforeImage.buffer.toString("base64");
@@ -194,17 +1233,10 @@ app.post(
         afterImage.buffer.toString("base64");
 
 
-      // Optional area supplied by frontend
-
-      const areaKm2 =
-        req.body.areaKm2
-          ? Number(req.body.areaKm2)
-          : null;
-
-
-      // ==========================================
-      // GEMINI PROMPT
-      // ==========================================
+      // ====================================================
+      // STEP 4
+      // LAND-COVER ANALYSIS PROMPT
+      // ====================================================
 
       const prompt = `
 
@@ -217,7 +1249,25 @@ IMAGE 2 = AFTER
 
 Compare them carefully.
 
-This is a land-cover / remote-sensing style change detection application.
+This is a land-cover / remote-sensing style
+change detection application.
+
+The images have already passed an image-quality
+and false-detection screening.
+
+The quality screening result is:
+
+${JSON.stringify(
+  falseDetection,
+  null,
+  2
+)}
+
+Use this information when determining confidence.
+
+--------------------------------------------------
+LAND-COVER CATEGORIES
+--------------------------------------------------
 
 Analyze these categories when visible:
 
@@ -228,9 +1278,14 @@ Analyze these categories when visible:
 5. ROADS
 6. OTHER IMPORTANT LAND-COVER TYPES
 
-For each category estimate its visible percentage in:
+--------------------------------------------------
+PERCENTAGES
+--------------------------------------------------
+
+For each category estimate its visible percentage:
 
 t1Percent = BEFORE image
+
 t2Percent = AFTER image
 
 Calculate:
@@ -243,24 +1298,34 @@ increase
 decrease
 unchanged
 
-Write a short factual description of what changed.
+Write a short factual description.
 
-IMPORTANT:
+--------------------------------------------------
+IMPORTANT
+--------------------------------------------------
 
 - Do NOT invent exact geographic measurements.
 - Percentages are visual estimates of the visible image.
-- If something cannot be reliably identified, use a reasonable estimate and lower confidence.
+- If something cannot be reliably identified,
+  use a reasonable estimate and lower confidence.
 - Do not claim an exact km² area unless the user supplied one.
 - Do not invent satellite sensor information.
 - Confidence must represent confidence in the visual comparison.
-- Focus on actual visible differences between the two images.
+- Focus on actual visible differences.
+- Do not treat minor image artifacts as actual land-cover change.
 
-For filteredNoiseDelta:
+--------------------------------------------------
+FILTERED NOISE DELTA
+--------------------------------------------------
 
-Give a small estimated value representing possible noise/artifact difference.
+Give a small estimated value representing possible
+noise/artifact difference.
+
 Do NOT exaggerate it.
 
-For primaryVector:
+--------------------------------------------------
+PRIMARY VECTOR
+--------------------------------------------------
 
 Describe the most significant transition.
 
@@ -268,15 +1333,41 @@ Example:
 
 "Vegetation → High-Density Buildings"
 
-If the images do not show land-cover changes, clearly say so.
+--------------------------------------------------
+FALSE DETECTION
+--------------------------------------------------
+
+The images have already been screened for:
+
+- blur
+- clouds
+- fog
+- haze
+- lighting differences
+- seasonal differences
+- image mismatch
+- low quality
+- occlusion
+
+Do not ignore the screening result.
+
+If a remaining visual difference could still be
+an artifact, reduce confidence appropriately.
+
+--------------------------------------------------
+
+If the images do not show meaningful land-cover changes,
+clearly say so.
 
 Return ONLY the requested JSON structure.
+
 `;
 
 
-      // ==========================================
-      // GEMINI API
-      // ==========================================
+      // ====================================================
+      // STEP 5
+      // GEMINI LAND-COVER ANALYSIS
+      // ====================================================
 
       const response =
         await ai.interactions.create({
@@ -290,7 +1381,9 @@ Return ONLY the requested JSON structure.
 
               data: beforeBase64,
 
-              mime_type: beforeImage.mimetype
+              mime_type:
+                beforeImage.mimetype
+
             },
 
             {
@@ -298,19 +1391,19 @@ Return ONLY the requested JSON structure.
 
               data: afterBase64,
 
-              mime_type: afterImage.mimetype
+              mime_type:
+                afterImage.mimetype
+
             },
 
             {
               type: "text",
 
               text: prompt
+
             }
 
           ],
-
-
-          // Structured JSON output
 
           response_format: {
 
@@ -325,44 +1418,209 @@ Return ONLY the requested JSON structure.
         });
 
 
-      // Parse Gemini JSON
+      // ====================================================
+      // STEP 6
+      // PARSE RESULT
+      // ====================================================
 
       const result =
-        JSON.parse(response.output_text);
+        JSON.parse(
+          response.output_text
+        );
 
 
-      // If user supplied actual area,
-      // attach it instead of inventing one.
+      // ====================================================
+      // STEP 7
+      // ATTACH ACTUAL AREA
+      // ====================================================
 
       result.changeSummary.totalAnalyzedAreaKm2 =
         areaKm2;
 
 
-      // Send to React
+      // ====================================================
+      // STEP 8
+      // RETURN RESULT
+      // ====================================================
 
-      res.json({
+      return res.json({
 
         success: true,
+
+        analysisBlocked: false,
+
+        falseDetection: falseDetection,
 
         data: result
 
       });
 
+    }
 
-    } catch (error) {
+    catch (error) {
 
       console.error(
         "Gemini Analysis Error:",
         error
       );
 
-      res.status(500).json({
+
+      return res.status(500).json({
 
         success: false,
 
-        message: "Image analysis failed.",
+        message:
+          "Image analysis failed.",
 
-        error: error.message
+        error:
+          error.message
+
+      });
+
+    }
+
+  }
+
+);
+
+
+// ============================================================
+// AI CHATBOT
+// ============================================================
+
+app.post(
+  "/api/chat",
+  async (req, res) => {
+
+    try {
+
+      const {
+        message,
+        analysisContext,
+        previousInteractionId
+      } = req.body;
+
+
+      if (!message) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            "Message is required."
+
+        });
+
+      }
+
+
+      const context =
+        analysisContext
+
+          ? `
+
+You are Geozenx AI, an AI assistant for satellite
+and land-cover change analysis.
+
+Here is the latest image analysis result:
+
+${JSON.stringify(
+  analysisContext,
+  null,
+  2
+)}
+
+Use this analysis when answering
+the user's question.
+
+Do not invent exact geographic measurements
+that are not present in the provided analysis.
+
+`
+
+          : `
+
+You are Geozenx AI, an AI assistant for satellite imagery,
+land-cover classification, remote sensing and geographical
+change analysis.
+
+Answer clearly and helpfully.
+
+`;
+
+
+      const interactionInput = `
+
+${context}
+
+USER QUESTION:
+
+${message}
+
+`;
+
+
+      const interactionOptions = {
+
+        model:
+          "gemini-3.8-flash",
+
+        input:
+          interactionInput
+
+      };
+
+
+      // ----------------------------------------------------
+      // CONTINUE PREVIOUS CONVERSATION
+      // ----------------------------------------------------
+
+      if (previousInteractionId) {
+
+        interactionOptions.previous_interaction_id =
+          previousInteractionId;
+
+      }
+
+
+      const response =
+        await ai.interactions.create(
+          interactionOptions
+        );
+
+
+      return res.json({
+
+        success: true,
+
+        reply:
+          response.output_text,
+
+        interactionId:
+          response.id
+
+      });
+
+    }
+
+    catch (error) {
+
+      console.error(
+        "CHATBOT ERROR:",
+        error
+      );
+
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          "Chatbot failed.",
+
+        error:
+          error.message
 
       });
 
@@ -370,90 +1628,23 @@ Return ONLY the requested JSON structure.
 
   }
 );
-// ===============================
-// AI CHATBOT
-// ===============================
-
-app.post("/api/chat", async (req, res) => {
-  try {
-    const { message, analysisContext, previousInteractionId } = req.body;
-
-    if (!message) {
-      return res.status(400).json({
-        success: false,
-        message: "Message is required."
-      });
-    }
-
-    const context = analysisContext
-      ? `
-You are Geozenx AI, an AI assistant for satellite and land-cover
-change analysis.
-
-Here is the latest image analysis result:
-
-${JSON.stringify(analysisContext, null, 2)}
-
-Use this analysis when answering the user's question.
-Do not invent exact geographic measurements that are not present
-in the provided analysis.
-`
-      : `
-You are Geozenx AI, an AI assistant for satellite imagery,
-land-cover classification, remote sensing and geographical
-change analysis.
-
-Answer clearly and helpfully.
-`;
-
-    const interactionInput = `${context}
-
-USER QUESTION:
-${message}
-`;
-
-    const interactionOptions = {
-      model: "gemini-3.8-flash",
-      input: interactionInput
-    };
-
-    // Continue previous conversation if available
-    if (previousInteractionId) {
-      interactionOptions.previous_interaction_id =
-        previousInteractionId;
-    }
-
-    const response = await ai.interactions.create(interactionOptions);
-
-    res.json({
-      success: true,
-      reply: response.output_text,
-      interactionId: response.id
-    });
-
-  } catch (error) {
-    console.error("CHATBOT ERROR:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Chatbot failed.",
-      error: error.message
-    });
-  }
-});
 
 
-// ==========================================
+// ============================================================
 // SERVER
-// ==========================================
+// ============================================================
 
 const PORT =
   process.env.PORT || 5000;
 
-app.listen(PORT, () => {
 
-  console.log(`
-    Geozenx AI backend running on port ${PORT}
-  `);
+app.listen(
+  PORT,
+  () => {
 
-});
+    console.log(
+      `Geozenx AI backend running on port ${PORT}`
+    );
+
+  }
+);
