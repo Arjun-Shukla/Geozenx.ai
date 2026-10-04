@@ -52,7 +52,7 @@ export default function ImageAnalysis({ onAnalysisComplete, isAnalyzing, setIsAn
         try {
           const result = await analyzeImages({ t1File, t2File, t1Image, t2Image });
           setIsAnalyzing(false);
-          onAnalysisComplete(result);
+          onAnalysisComplete(result, { t1File, t2File, t1Image, t2Image });
         } catch (error) {
           setIsAnalyzing(false);
           window.alert(`Image analysis failed: ${error.message}`);

@@ -2,6 +2,7 @@ import { MOCK_CHANGE_SUMMARY, MOCK_TRANSITION_MATRIX, SAMPLE_PRESETS } from './d
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const ANALYZE_ENDPOINT = import.meta.env.VITE_ANALYZE_ENDPOINT || '/api/analyze';
+const IMAGE_QUALITY_ENDPOINT = import.meta.env.VITE_IMAGE_QUALITY_ENDPOINT || '/api/check-image-quality';
 const CHAT_ENDPOINT = import.meta.env.VITE_CHAT_ENDPOINT || '/api/chat';
 
 const apiUrl = (endpoint) => {
@@ -106,6 +107,34 @@ export const analyzeImages = async ({ t1File, t2File, t1Image, t2Image }) => {
   }
 
   return normalizeAnalysisResponse(await readResponse(response));
+};
+
+export const checkImageQuality = async ({ t1File, t2File, t1Image, t2Image }) => {
+  if ((!t1File && !t1Image) || (!t2File && !t2Image)) {
+    throw new Error('Both temporal images are required for pseudo-change filtering.');
+  }
+
+  const formData = new FormData();
+  const beforeImage = t1File || await dataUrlToFile(t1Image, 'before-image');
+  const afterImage = t2File || await dataUrlToFile(t2Image, 'after-image');
+  formData.append('beforeImage', beforeImage, beforeImage.name);
+  formData.append('afterImage', afterImage, afterImage.name);
+
+  let response;
+  try {
+    response = await fetch(apiUrl(IMAGE_QUALITY_ENDPOINT), {
+      method: 'POST',
+      body: formData
+    });
+  } catch {
+    throw new Error('The image quality service is unreachable. Start the backend or configure VITE_API_BASE_URL.');
+  }
+
+  const body = await readResponse(response);
+  if (!body?.data) {
+    throw new Error('The image quality service returned an invalid response.');
+  }
+  return body.data;
 };
 
 export const askChangeQuestion = async ({ query, analysis }) => {

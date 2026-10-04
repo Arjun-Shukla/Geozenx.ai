@@ -10,9 +10,11 @@ export default function App() {
   const [isAnalyzed, setIsAnalyzed] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisData, setAnalysisData] = useState(null);
+  const [analysisImages, setAnalysisImages] = useState(null);
 
-  const handleAnalysisComplete = (result) => {
+  const handleAnalysisComplete = (result, images) => {
     setAnalysisData(result);
+    setAnalysisImages(images);
     setIsAnalyzed(true);
   };
 
@@ -39,6 +41,7 @@ export default function App() {
           <TransitionMatrix 
             isAnalyzed={isAnalyzed}
             analysisData={analysisData}
+            analysisImages={analysisImages}
           />
 
           {/* Section 3: Change Intelligence Natural Language Chat */}

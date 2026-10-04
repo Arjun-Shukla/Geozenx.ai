@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Table, TrendingUp, TrendingDown, ShieldAlert, CheckCircle2, Sliders, Info, Eye, Layers } from 'lucide-react';
-import { MOCK_TRANSITION_MATRIX, MOCK_CHANGE_SUMMARY, FILTER_STEPS, SAMPLE_PRESETS } from '../data/mockData';
+import { MOCK_TRANSITION_MATRIX, MOCK_CHANGE_SUMMARY, SAMPLE_PRESETS } from '../data/mockData';
+import { checkImageQuality } from '../api';
 
-export default function TransitionMatrix({ isAnalyzed, analysisData }) {
+export default function TransitionMatrix({ isAnalyzed, analysisData, analysisImages }) {
   const [isFiltering, setIsFiltering] = useState(false);
-  const [filterComplete, setFilterComplete] = useState(false);
-  const [filterProgress, setFilterProgress] = useState(0);
-  const [filterStepIndex, setFilterStepIndex] = useState(0);
+  const [filterResult, setFilterResult] = useState(null);
+  const [filterError, setFilterError] = useState('');
   const [showMaskPreview, setShowMaskPreview] = useState(false);
   const transitionMatrix = analysisData?.transitionMatrix?.length
     ? analysisData.transitionMatrix
@@ -14,6 +14,11 @@ export default function TransitionMatrix({ isAnalyzed, analysisData }) {
   const changeSummary = analysisData?.summary
     ? { ...MOCK_CHANGE_SUMMARY, ...analysisData.summary }
     : MOCK_CHANGE_SUMMARY;
+
+  useEffect(() => {
+    setFilterResult(null);
+    setFilterError('');
+  }, [analysisData]);
 
   if (!isAnalyzed) {
     return (
@@ -27,38 +32,18 @@ export default function TransitionMatrix({ isAnalyzed, analysisData }) {
     );
   }
 
-  const handleRunFilter = () => {
-    if (isFiltering || filterComplete) return;
+  const handleRunFilter = async () => {
+    if (isFiltering || !analysisImages) return;
     setIsFiltering(true);
-    setFilterProgress(0);
-    setFilterStepIndex(0);
-
-    const totalSteps = FILTER_STEPS.length;
-    const duration = 3000; // 3 seconds
-    const intervalTime = 50;
-    const increment = 100 / (duration / intervalTime);
-
-    let currentProgress = 0;
-    const interval = setInterval(() => {
-      currentProgress += increment;
-      if (currentProgress >= 100) {
-        currentProgress = 100;
-        setFilterProgress(100);
-        setFilterStepIndex(totalSteps - 1);
-        clearInterval(interval);
-        setTimeout(() => {
-          setIsFiltering(false);
-          setFilterComplete(true);
-        }, 400);
-      } else {
-        setFilterProgress(Math.round(currentProgress));
-        const stepIdx = Math.min(
-          Math.floor((currentProgress / 100) * totalSteps),
-          totalSteps - 1
-        );
-        setFilterStepIndex(stepIdx);
-      }
-    }, intervalTime);
+    setFilterError('');
+    try {
+      const result = await checkImageQuality(analysisImages);
+      setFilterResult(result);
+    } catch (error) {
+      setFilterError(error.message);
+    } finally {
+      setIsFiltering(false);
+    }
   };
 
   return (
@@ -189,7 +174,7 @@ export default function TransitionMatrix({ isAnalyzed, analysisData }) {
             <div>
               <div className="text-slate-400 text-[10px]">CONFIDENCE SCORE</div>
               <div className="text-emerald-400 font-bold">
-                {filterComplete ? `${changeSummary.filteredConfidenceScore}%` : `${changeSummary.confidenceScore}%`}
+              {changeSummary.confidenceScore}%
               </div>
             </div>
           </div>
@@ -213,48 +198,70 @@ export default function TransitionMatrix({ isAnalyzed, analysisData }) {
           </div>
 
           <div>
-            {filterComplete ? (
-              <div className="px-4 py-2 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 font-mono text-xs font-semibold flex items-center space-x-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>Pseudo-change filtering complete.</span>
+            {filterResult ? (
+              <div className={`px-4 py-2 rounded-lg border font-mono text-xs font-semibold flex items-center space-x-2 ${
+                filterResult.falseDetectionRisk === 'high'
+                  ? 'bg-rose-950/60 border-rose-500/40 text-rose-300'
+                  : filterResult.falseDetectionRisk === 'medium'
+                    ? 'bg-amber-950/60 border-amber-500/40 text-amber-300'
+                    : 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+              }`}>
+                <CheckCircle2 className={`w-4 h-4 ${
+                  filterResult.falseDetectionRisk === 'high'
+                    ? 'text-rose-400'
+                    : filterResult.falseDetectionRisk === 'medium'
+                      ? 'text-amber-400'
+                      : 'text-emerald-400'
+                }`} />
+                <span>QUALITY CHECK COMPLETE · {filterResult.falseDetectionRisk?.toUpperCase()} RISK</span>
               </div>
             ) : (
               <button
                 onClick={handleRunFilter}
-                disabled={isFiltering}
+                disabled={isFiltering || !analysisImages}
                 className={`px-6 py-2.5 rounded-lg font-mono font-bold text-xs uppercase tracking-wider transition-all flex items-center space-x-2 ${
-                  isFiltering
+                  isFiltering || !analysisImages
                     ? 'bg-space-800 text-slate-500 cursor-not-allowed border border-space-700'
                     : 'bg-space-800 hover:bg-space-750 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 hover:text-white shadow-md active:scale-[0.99]'
                 }`}
               >
-                <span>◈ PSEUDO-CHANGE FILTER</span>
+                <span>{isFiltering ? 'RUNNING IMAGE QUALITY CHECK...' : '◈ PSEUDO-CHANGE FILTER'}</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* Filter Progress Animation Display */}
-        {isFiltering && (
-          <div className="mt-4 p-4 rounded-lg bg-space-950 border border-cyan-500/30">
-            <div className="flex justify-between items-center mb-2 font-mono text-xs">
-              <span className="text-cyan-400 flex items-center space-x-2">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
-                </span>
-                <span>STATUS: PSEUDO-CHANGE FILTERING... [{FILTER_STEPS[filterStepIndex]}]</span>
-              </span>
-              <span className="text-cyan-300 font-bold">{filterProgress}%</span>
-            </div>
-
-            <div className="w-full bg-space-800 h-2 rounded-full overflow-hidden p-0.5 border border-space-700">
-              <div 
-                className="bg-gradient-to-r from-blue-600 via-cyan-400 to-emerald-400 h-full rounded-full transition-all duration-75 ease-out shadow-[0_0_10px_rgba(0,240,255,0.8)]"
-                style={{ width: `${filterProgress}%` }}
-              />
-            </div>
+        {filterError && (
+          <div role="alert" className="mt-4 p-3 rounded-lg bg-rose-950/50 border border-rose-500/40 text-rose-300 text-xs font-mono">
+            Image quality check failed: {filterError}
           </div>
+        )}
+
+        {filterResult && (
+          <div className="mt-4 p-4 rounded-lg bg-space-950 border border-cyan-500/30 space-y-3">
+            <p className="text-sm text-slate-200">{filterResult.message}</p>
+            <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs font-mono text-slate-400">
+              <span>VALID FOR CHANGE DETECTION: <strong className={filterResult.validForChangeDetection ? 'text-emerald-300' : 'text-rose-300'}>{filterResult.validForChangeDetection ? 'YES' : 'NO'}</strong></span>
+              <span>ASSESSMENT CONFIDENCE: <strong className="text-cyan-300">{filterResult.confidence}%</strong></span>
+            </div>
+            {filterResult.issues?.filter((issue) => issue.detected).length > 0 && (
+              <ul className="space-y-1 text-xs text-slate-300">
+                {filterResult.issues.filter((issue) => issue.detected).map((issue, index) => (
+                  <li key={`${issue.type}-${index}`}>
+                    <span className="text-amber-300">{issue.type.replaceAll('_', ' ').toUpperCase()} · {issue.severity.toUpperCase()}:</span> {issue.explanation}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-xs text-slate-400">RECOMMENDATION: {filterResult.recommendation}</p>
+          </div>
+        )}
+
+        {isFiltering && (
+          <div role="status" className="mt-4 p-4 rounded-lg bg-space-950 border border-cyan-500/30 text-cyan-300 text-xs font-mono flex items-center space-x-2">
+            <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+            <span>Checking temporal images for pseudo-change risks...</span>
+            </div>
         )}
       </div>
 
